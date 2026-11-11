@@ -1,0 +1,13 @@
+# 默认交给 git 处理换行；但 Windows 脚本必须保持 CRLF，否则 .cmd / .vbs 会失效
+* text=auto eol=lf
+
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+*.vbs   text eol=crlf
+*.ps1   text eol=crlf
+*.reg   text eol=crlf
+
+*.png   binary
+*.ico   binary
+*.jpg   binary
+*.zip   binary

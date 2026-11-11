@@ -1,0 +1,39 @@
+{
+  "name": "desktop-usage-board",
+  "productName": "桌面看板",
+  "version": "1.0.0",
+  "description": "透明毛玻璃风格的桌面「屏幕使用时间」小组件（Electron + Windows 11 亚克力，参考 macOS 桌面组件）",
+  "keywords": [
+    "electron",
+    "windows-11",
+    "acrylic",
+    "glassmorphism",
+    "desktop-widget",
+    "screen-time",
+    "usage-tracker",
+    "weather",
+    "macos-widget"
+  ],
+  "license": "MIT",
+  "author": "Yi Quanzhi",
+  "main": "main.js",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "electron .",
+    "start:css": "electron . --glass=css",
+    "shot": "electron tools/deskshot.js preview.png",
+    "diagram": "electron tools/render-diagram.js",
+    "icons": "python tools/gen-icons.py"
+  },
+  "devDependencies": {
+    "electron": "43.3.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  }
+}

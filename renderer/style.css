@@ -1,0 +1,532 @@
+/* ------------------------------------------------------------------
+   桌面看板 · 透明毛玻璃样式
+   参考 macOS 桌面小组件：大圆角、半透明材质、极细高光描边、克制的字重层级。
+   跟随系统浅色/深色自动切换；acrylic/mica 模式下由 Windows 11 提供真实
+   亚克力模糊，此时圆角交给系统裁切。
+------------------------------------------------------------------ */
+
+:root {
+  color-scheme: light dark;
+
+  --radius: 26px;
+
+  /* 浅色（默认） */
+  --fg: #17181c;
+  --fg-dim: rgba(23, 24, 28, 0.66);
+  --fg-faint: rgba(23, 24, 28, 0.46);
+  --accent-a: #5aa7f5;
+  --accent-b: #9575ff;
+  --card-top: rgba(255, 255, 255, 0.72);
+  --card-bottom: rgba(246, 247, 251, 0.52);
+  --hairline: rgba(0, 0, 0, 0.08);
+  --track: rgba(0, 0, 0, 0.09);
+  --bar: rgba(0, 0, 0, 0.26);
+  --bar-empty: rgba(0, 0, 0, 0.1);
+  --card-shadow: 0 14px 34px rgba(10, 12, 20, 0.22);
+  --hero-shadow: none;
+  --hover: rgba(0, 0, 0, 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: rgba(255, 255, 255, 0.97);
+    --fg-dim: rgba(255, 255, 255, 0.66);
+    --fg-faint: rgba(255, 255, 255, 0.44);
+    --card-top: rgba(40, 41, 48, 0.6);
+    --card-bottom: rgba(16, 17, 22, 0.72);
+    --hairline: rgba(255, 255, 255, 0.1);
+    --track: rgba(255, 255, 255, 0.14);
+    --bar: rgba(255, 255, 255, 0.34);
+    --bar-empty: rgba(255, 255, 255, 0.12);
+    --card-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
+    --hero-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    --hover: rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* Windows 11 亚克力 / 云母：窗口四周由 DWM 裁圆角，卡片自身体色可以更透一点 */
+html[data-glass='acrylic'],
+html[data-glass='mica'] {
+  --radius: 12px;
+  --card-top: rgba(255, 255, 255, 0.4);
+  --card-bottom: rgba(247, 249, 254, 0.22);
+  --card-shadow: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-glass='acrylic'],
+  html[data-glass='mica'] {
+    --card-top: rgba(34, 35, 42, 0.36);
+    --card-bottom: rgba(14, 15, 20, 0.42);
+  }
+}
+
+/* ---------------- 透明度三档（菜单 → 透明度） ----------------
+   系统亚克力已经提供了真模糊，卡片自身只需要一点点「纱」；
+   越透越依赖系统模糊，字迹靠描边和阴影保持可读。 */
+
+html[data-glass='acrylic'][data-veil='clear'],
+html[data-glass='mica'][data-veil='clear'] {
+  --card-top: rgba(255, 255, 255, 0.24);
+  --card-bottom: rgba(247, 249, 254, 0.08);
+  --hairline: rgba(0, 0, 0, 0.07);
+  --track: rgba(0, 0, 0, 0.1);
+}
+
+html[data-glass='acrylic'][data-veil='ultra'],
+html[data-glass='mica'][data-veil='ultra'] {
+  --card-top: rgba(255, 255, 255, 0.12);
+  --card-bottom: rgba(247, 249, 254, 0.03);
+  --hairline: rgba(0, 0, 0, 0.07);
+  --track: rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-glass='acrylic'][data-veil='clear'],
+  html[data-glass='mica'][data-veil='clear'] {
+    --card-top: rgba(30, 31, 38, 0.24);
+    --card-bottom: rgba(12, 13, 17, 0.18);
+    --hairline: rgba(255, 255, 255, 0.12);
+  }
+
+  html[data-glass='acrylic'][data-veil='ultra'],
+  html[data-glass='mica'][data-veil='ultra'] {
+    --card-top: rgba(26, 27, 33, 0.12);
+    --card-bottom: rgba(10, 11, 14, 0.08);
+    --hairline: rgba(255, 255, 255, 0.14);
+  }
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  font-family:
+    'SF Pro Display', 'Segoe UI Variable Display', 'PingFang SC', 'Microsoft YaHei UI',
+    'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  cursor: default;
+  user-select: none;
+}
+
+.card {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px 13px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, var(--card-top), var(--card-bottom));
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.55),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.28),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06),
+    var(--card-shadow);
+  -webkit-app-region: drag;
+  overflow: hidden;
+}
+
+/* acrylic / mica 模式下真模糊已经由 DWM 做完，再叠一层 CSS 模糊只会把
+   材质「洗白」变浑浊 —— 这里直接关掉，让系统亚克力原样透上来。 */
+html[data-glass='acrylic'] .card,
+html[data-glass='mica'] .card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ---------------- 顶部 ---------------- */
+
+.hdr {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.app-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28));
+}
+
+.title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.012em;
+  color: var(--fg);
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-faint);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.icon-btn {
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.more {
+  margin-right: -5px;
+}
+
+.icon-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+.icon-btn:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+/* 固定到桌面：按钮高亮，提示当前处于「钉在桌面」状态 */
+.pin {
+  margin-left: 2px;
+}
+
+.pin svg {
+  width: 13.5px;
+  height: 13.5px;
+}
+
+.pin.active {
+  color: var(--accent-a);
+}
+
+/* ---------------- 主数字 ---------------- */
+
+.hero {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.hero-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--fg-faint);
+}
+
+.hero-value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 38px;
+  line-height: 1.05;
+  font-weight: 620;
+  letter-spacing: -0.022em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  text-shadow: var(--hero-shadow);
+}
+
+.hero-value .unit {
+  font-size: 14px;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+  color: var(--fg-dim);
+  margin-right: 4px;
+}
+
+.hero-value .unit:last-child {
+  margin-right: 0;
+}
+
+.hero-value .minute {
+  color: var(--fg);
+}
+
+/* ---------------- 天气（右上角） ---------------- */
+
+.wx {
+  position: absolute;
+  top: 47px;
+  right: 17px;
+  max-width: 46%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  pointer-events: none;
+  text-align: right;
+}
+
+.wx-main {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wx-icon {
+  font-size: 19px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18));
+}
+
+.wx-temp {
+  font-size: 25px;
+  line-height: 1.05;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  text-shadow: var(--hero-shadow);
+}
+
+.wx-meta {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--fg-dim);
+}
+
+.wx.unavailable .wx-icon,
+.wx.unavailable .wx-temp {
+  opacity: 0.45;
+}
+
+/* ---------------- 目标进度 ---------------- */
+
+.goal {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+  box-shadow: 0 0 10px rgba(120, 160, 255, 0.45);
+  transition: width 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.goal-text {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------- 三个小指标 ---------------- */
+
+.stats {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 1px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stat-k {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+.stat-v {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--hairline);
+  flex: 0 0 1px;
+}
+
+/* ---------------- 7 日柱状图 ---------------- */
+
+.chart {
+  flex: 1 1 auto;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.bars {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-height: 0;
+}
+
+.col {
+  flex: 1 1 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar {
+  width: 100%;
+  max-width: 22px;
+  min-height: 3px;
+  border-radius: 4px;
+  background: var(--bar);
+  transition: height 520ms cubic-bezier(0.22, 1, 0.36, 1), background 160ms ease;
+}
+
+.bar.past {
+  background: var(--bar);
+}
+
+.bar.today {
+  background: linear-gradient(180deg, var(--accent-a), var(--accent-b));
+  box-shadow: 0 0 12px rgba(120, 160, 255, 0.35);
+}
+
+.bar.empty {
+  background: var(--bar-empty);
+}
+
+.labels {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.label {
+  flex: 1 1 0;
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--fg-faint);
+  letter-spacing: 0.02em;
+}
+
+.label.today {
+  color: var(--fg);
+  font-weight: 620;
+}
+
+/* 兜底模式（老系统没有系统级亚克力）：既然窗后没有真模糊，就把卡片做成
+   接近不透明的浅色玻璃，保证字看得清，而不是让桌面内容透上来 */
+html[data-glass='css'] .card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(244, 246, 251, 0.82));
+}
+
+/* 操作提示（例如：鼠标穿透已开启） */
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(20, 22, 28, 0.78);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.hint.show {
+  opacity: 1;
+}
+
+/* 窗口被拉得很矮时收藏次要信息，保持整洁 */
+@media (max-height: 224px) {
+  .goal-text,
+  .labels {
+    display: none;
+  }
+  .hero-value {
+    font-size: 32px;
+  }
+}
+
+/* 窗口被拉得很窄时缩小天气块，避免和大号时长撞在一起 */
+@media (max-width: 359px) {
+  .hero-value {
+    font-size: 33px;
+  }
+  .wx {
+    top: 45px;
+    right: 13px;
+  }
+  .wx-temp {
+    font-size: 21px;
+  }
+  .wx-icon {
+    font-size: 17px;
+  }
+}

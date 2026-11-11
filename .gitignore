@@ -1,0 +1,23 @@
+# ---- 依赖 ----
+node_modules/
+.pnpm-store/
+
+# ---- 运行时数据（含个人使用记录、窗口位置、天气缓存，不要提交）----
+data/
+
+# ---- 日志 / 临时产物 ----
+*.log
+*.tmp
+/preview.png
+/dist/
+/out/
+
+# ---- 本机快捷方式（里面是绝对路径，对别人无效）----
+*.lnk
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

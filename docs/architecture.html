@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>桌面看板 · 技术架构</title>
+<style>
+  :root{
+    --bg:#0b0d12;
+    --panel:#12151c;
+    --panel-2:#161a23;
+    --line:#242b3a;
+    --fg:#e9edf6;
+    --dim:#98a2b4;
+    --a1:#6fb6ff;
+    --a2:#a07bff;
+    --ok:#5ddba0;
+    --warn:#ffc46b;
+    --mono:Consolas,"Cascadia Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden}
+  body{
+    display:grid;place-items:center;
+    background:
+      radial-gradient(1200px 460px at 12% -6%, rgba(111,182,255,.15), transparent 60%),
+      radial-gradient(900px 420px at 92% 4%, rgba(160,123,255,.13), transparent 62%),
+      var(--bg);
+    color:var(--fg);
+    font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .stage{position:relative;width:1690px;height:1000px}
+
+  /* ---------- 标题 ---------- */
+  header{position:absolute;left:30px;top:14px;right:30px;height:64px;
+    display:flex;align-items:flex-end;justify-content:space-between}
+  h1{font-size:26px;letter-spacing:.4px;font-weight:650}
+  h1 span{background:linear-gradient(90deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{margin-top:6px;font-size:12px;color:var(--dim);letter-spacing:.3px}
+  .meta{font-size:11.5px;color:var(--dim);text-align:right;line-height:1.7}
+  .meta b{color:var(--fg);font-weight:600}
+
+  /* ---------- 通用面板 ---------- */
+  .panel{
+    position:absolute;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);border-radius:15px;
+    box-shadow:0 16px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .panel > .head{
+    display:flex;align-items:baseline;gap:9px;padding:13px 18px 10px;
+    border-bottom:1px solid rgba(255,255,255,.05);
+  }
+  .panel > .head h2{font-size:14.5px;font-weight:650;letter-spacing:.2px}
+  .panel > .head .tag{
+    font-family:var(--mono);font-size:10px;color:var(--a1);
+    border:1px solid rgba(111,182,255,.35);background:rgba(111,182,255,.08);
+    padding:1px 6px;border-radius:999px;letter-spacing:.2px;
+  }
+  .panel > .head .note{margin-left:auto;font-size:11px;color:var(--dim)}
+
+  /* ---------- 系统层 ---------- */
+  .sys{left:30px;top:92px;width:1630px;height:128px;border-color:#2a3346;
+       background:linear-gradient(180deg,#171c26,#101318)}
+  .chips{display:flex;gap:11px;padding:10px 18px}
+  .chip{
+    flex:1;min-width:0;background:rgba(255,255,255,.028);
+    border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:8px 12px;
+  }
+  .chip .k{font-size:12.2px;font-weight:600;letter-spacing:.2px;display:flex;align-items:center;gap:6px}
+  .chip .k i{width:6px;height:6px;border-radius:50%;background:var(--a1);display:inline-block;flex:none}
+  .chip .v{font-family:var(--mono);font-size:10.2px;color:var(--dim);margin-top:5px;line-height:1.5}
+  .chip .v b{color:#cfd7e6;font-weight:500}
+
+  /* ---------- 三列 ---------- */
+  .main{left:30px;top:242px;width:846px;height:512px}
+  .bridge{left:928px;top:242px;width:168px;height:512px;display:flex;flex-direction:column}
+  .render{left:1140px;top:242px;width:520px;height:512px}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);
+        gap:11px;padding:13px 16px 15px;height:calc(100% - 45px)}
+  .card{
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
+    border-radius:11px;padding:11px 12px;display:flex;flex-direction:column;gap:6px;
+  }
+  .card .t{font-size:12.2px;font-weight:650;display:flex;align-items:center;gap:6px}
+  .card .t .n{
+    font-family:var(--mono);font-size:9px;color:#0b0d12;background:var(--a1);
+    border-radius:4px;padding:1px 4px;font-weight:700;flex:none
+  }
+  .card .d{font-size:11.1px;color:var(--dim);line-height:1.72}
+  .card code{font-family:var(--mono);font-size:10px;color:#cfd7e6;background:rgba(255,255,255,.05);
+    padding:1px 3px;border-radius:4px}
+  .card .why{
+    margin-top:auto;font-size:10.1px;color:#7f8ca3;line-height:1.55;
+    border-top:1px dashed rgba(255,255,255,.09);padding-top:7px;
+  }
+  .card .why b{color:#9fb0c9;font-weight:600}
+
+  /* preload 桥 */
+  .bridge .body{padding:11px 10px;display:flex;flex-direction:column;gap:7px;flex:1}
+  .api{font-family:var(--mono);font-size:9.8px;color:#cfd7e6;background:rgba(111,182,255,.07);
+    border:1px solid rgba(111,182,255,.18);border-radius:6px;padding:4px 6px;line-height:1.4}
+  .api span{color:var(--dim)}
+  .guard{margin-top:auto;font-size:9.8px;color:var(--dim);line-height:1.55;
+    border-top:1px dashed rgba(255,255,255,.1);padding-top:9px}
+  .guard b{color:var(--ok);font-weight:600}
+
+  /* 渲染进程 */
+  .render .body{padding:13px 16px;display:flex;flex-direction:column;gap:10px;height:calc(100% - 45px)}
+  .rrow{display:flex;gap:10px;flex:1}
+  .rcard{flex:1;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
+    border-radius:11px;padding:10px 11px;display:flex;flex-direction:column;gap:5px}
+  .rcard .t{font-size:12px;font-weight:650}
+  .rcard .d{font-size:10.3px;color:var(--dim);line-height:1.6}
+  .rcard code{font-family:var(--mono);font-size:9.8px;color:#cfd7e6;background:rgba(255,255,255,.05);
+    padding:1px 3px;border-radius:4px}
+  .preview{
+    border:1px solid rgba(255,255,255,.09);border-radius:11px;padding:9px 11px;
+    background:linear-gradient(160deg,rgba(111,182,255,.14),rgba(160,123,255,.10));
+    font-size:10.2px;color:#dfe6f4;line-height:1.6
+  }
+  .preview b{color:#fff}
+  .badge{display:inline-block;font-size:9.6px;color:var(--a2);border:1px solid rgba(160,123,255,.35);
+    background:rgba(160,123,255,.1);border-radius:999px;padding:0 6px}
+  .bar{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--a1),var(--a2));
+    width:72%;display:inline-block;vertical-align:middle}
+
+  /* ---------- 外部 / 存储 ---------- */
+  .ext{left:30px;top:794px;width:1630px;height:140px}
+  .ext .chips{padding:12px 18px}
+
+  /* ---------- 箭头 ---------- */
+  .overlay{position:absolute;left:0;top:0;width:1690px;height:1000px;pointer-events:none;z-index:6}
+  .overlay text{font-family:"Microsoft YaHei",sans-serif;font-size:10px;fill:#9aa3b2}
+
+  .legend{position:absolute;left:396px;top:950px;display:flex;gap:18px;font-size:10.2px;color:var(--dim)}
+  .legend i{display:inline-block;width:16px;height:0;border-top:2px solid var(--a1);vertical-align:middle;margin-right:5px}
+  .foot{position:absolute;left:30px;top:952px;font-size:10.2px;color:#657086}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <header>
+    <div>
+      <h1>桌面看板 · <span>技术架构</span></h1>
+      <div class="sub">一个每秒采样“人是否在用电脑”的透明毛玻璃桌面小组件</div>
+    </div>
+    <div class="meta">
+      Electron <b>43</b> · Windows 11 <b>acrylic</b> · 4 进程<br>
+      主进程算数据 → preload 白名单 → 渲染进程只画界面
+    </div>
+  </header>
+
+  <!-- 系统层 -->
+  <section class="panel sys">
+    <div class="head">
+      <h2>Windows 11 系统层</h2>
+      <span class="tag">Win32 / DWM</span>
+      <span class="note">看板自己不画模糊，也不自己猜“你在不在”</span>
+    </div>
+    <div class="chips">
+      <div class="chip">
+        <div class="k"><i></i>DWM 合成器</div>
+        <div class="v">亚克力材质 <b>backgroundMaterial:'acrylic'</b><br>真·背景模糊由系统完成</div>
+      </div>
+      <div class="chip">
+        <div class="k"><i style="background:#5ddba0"></i>空闲计时</div>
+        <div class="v"><b>GetLastInputInfo()</b><br>整个系统最后一次键鼠输入距今多久</div>
+      </div>
+      <div class="chip">
+        <div class="k"><i style="background:#ffc46b"></i>窗口层级</div>
+        <div class="v"><b>SetWindowPos(hwnd, HWND_BOTTOM)</b><br>固定到桌面 = 压到 z 序最底层</div>
+      </div>
+      <div class="chip">
+        <div class="k"><i style="background:#a07bff"></i>会话事件</div>
+        <div class="v"><b>lock / unlock / suspend / resume</b><br>锁屏、睡眠时暂停计时</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 主进程 -->
+  <section class="panel main">
+    <div class="head">
+      <h2>主进程</h2>
+      <span class="tag">main.js · Node.js</span>
+      <span class="note">唯一有权限碰窗口和文件的地方</span>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="t"><span class="n">1s</span>计时循环 tick()</div>
+        <div class="d">每 1000ms 一拍：<code>getSystemIdleTime() ≤ 180s</code> 才给今天 <code>+1s</code>；单次最多补 5 秒，防止睡眠后“补算”。</div>
+        <div class="why"><b>为什么：</b>监听键鼠要全局钩子（要管理员权限、还会被杀软拦），系统空闲时间一行就够。</div>
+      </div>
+      <div class="card">
+        <div class="t"><span class="n">IO</span>数据层 usage-store</div>
+        <div class="d">按本地自然日累加，<code>data/usage.json</code> 每 20 秒落盘：先写 <code>.tmp</code> 再 rename，保留 120 天。</div>
+        <div class="why"><b>为什么：</b>只存“每天累计多少秒”，不存原始事件，文件永远是几 KB。</div>
+      </div>
+      <div class="card">
+        <div class="t"><span class="n">UI</span>窗口与层级</div>
+        <div class="d"><code>applyWindowLevel()</code> 管三种状态：置顶 / 普通 / 固定桌面；固定时 <code>setMovable(false)</code> 锁死位置。</div>
+        <div class="why"><b>为什么：</b>Electron 没有 <code>moveBottom()</code>，只能借 Win32 的 <code>SetWindowPos</code> 压到底层。</div>
+      </div>
+      <div class="card">
+        <div class="t"><span class="n">GL</span>毛玻璃自愈</div>
+        <div class="d">系统临时关掉透明效果会把亚克力变实心且不恢复：每 10 秒 <code>setBackgroundMaterial()</code> 重新贴一次。</div>
+        <div class="why"><b>为什么：</b>这是 Windows 的行为，不是 bug；只能“重新贴材质”骗它重画。</div>
+      </div>
+      <div class="card">
+        <div class="t"><span class="n">WX</span>天气</div>
+        <div class="d"><code>weather.js</code> 拉 Open-Meteo，10 分钟缓存到 <code>data/weather.json</code>；城市查不到自动试英文名。</div>
+        <div class="why"><b>为什么：</b>免费无 Key；城市库缺中文小城（“淮南”），加别名表回退。</div>
+      </div>
+      <div class="card">
+        <div class="t"><span class="n">OS</span>托盘 / 菜单 / 快捷键</div>
+        <div class="d">托盘常驻、右键菜单（外观 / 透明度 / 固定 / 穿透）、<code>Ctrl+Alt+H / D / Q</code> 全局快捷键。</div>
+        <div class="why"><b>为什么：</b>桌面小组件要“常驻但安静”，关窗口不等于退出。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- preload 桥 -->
+  <section class="panel bridge">
+    <div class="head" style="padding:13px 12px 10px">
+      <h2 style="font-size:13.5px">preload</h2>
+      <span class="tag" style="font-size:9px">桥</span>
+    </div>
+    <div class="body">
+      <div class="api">onUpdate(cb)<br><span>board:update</span></div>
+      <div class="api">snapshot()<br><span>board:snapshot</span></div>
+      <div class="api">onHint(cb)<br><span>board:hint</span></div>
+      <div class="api">togglePin()<br><span>ui:toggle-pin</span></div>
+      <div class="api">openMenu()<br><span>ui:context-menu</span></div>
+      <div class="guard">
+        <b>contextIsolation: true</b><br>
+        <b>nodeIntegration: false</b><br>
+        页面只能调这 7 个白名单方法
+      </div>
+    </div>
+  </section>
+
+  <!-- 渲染进程 -->
+  <section class="panel render">
+    <div class="head">
+      <h2>渲染进程</h2>
+      <span class="tag">renderer/ · 浏览器环境</span>
+    </div>
+    <div class="body">
+      <div class="preview">
+        <b>屏幕使用时间</b> · 11月9日 周一<br>
+        7 <span class="badge">小时</span> 42 分　<span style="color:#8fd0ff">6° 淮南 · 阴</span><br>
+        <span class="bar"></span><br>
+        <span style="font-size:9.4px;color:#a9b6cc">96% · 目标 8 小时 · 本次开机 07:56 · 日均 7.7 小时</span>
+      </div>
+      <div class="rrow">
+        <div class="rcard">
+          <div class="t">index.html</div>
+          <div class="d">语义结构：标题 / 大数字 / 进度条 / 三格统计 / 7 日柱状图 / 天气块；CSP 只允许本地资源。</div>
+        </div>
+        <div class="rcard">
+          <div class="t">style.css</div>
+          <div class="d">半透明卡片 + 内高光描边 + <code>veil</code> 三档透明度；acrylic 下显式关掉 <code>backdrop-filter</code>，避免把系统材质洗白。</div>
+        </div>
+      </div>
+      <div class="rrow" style="flex:0 0 auto">
+        <div class="rcard" style="flex:1">
+          <div class="t">app.js</div>
+          <div class="d">只做“把数据写进 DOM”：更新数字、进度、柱高与天气；<b>不做任何时间计算</b>（避免两套逻辑打架）。</div>
+        </div>
+        <div class="rcard" style="flex:1">
+          <div class="t">刷新策略</div>
+          <div class="d">每分钟最多一次、只改变化的文本与柱高，7 根柱子只建一次。<br>整机 CPU ≈ <b>0.5% 单核</b>。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 外部与存储 -->
+  <section class="panel ext">
+    <div class="head">
+      <h2>外部服务与本地存储</h2>
+      <span class="tag">HTTPS / fs</span>
+      <span class="note">断网也能用：全部走缓存兜底</span>
+    </div>
+    <div class="chips">
+      <div class="chip">
+        <div class="k"><i style="background:#5ddba0"></i>Open-Meteo（免费，无需 Key）</div>
+        <div class="v"><b>geocoding-api</b> 城市 → 经纬度　·　<b>api/forecast</b> 当前温度 + 今日最高/最低</div>
+      </div>
+      <div class="chip">
+        <div class="k"><i></i>data/usage.json</div>
+        <div class="v">每天一条：<b>{"2026-11-10": 1073}</b>　原子写、只留 120 天</div>
+      </div>
+      <div class="chip">
+        <div class="k"><i style="background:#a07bff"></i>data/settings.json + weather.json</div>
+        <div class="v">窗口位置、透明度、层级、目标小时；天气缓存（断网时显示上次结果）</div>
+      </div>
+      <div class="chip">
+        <div class="k"><i style="background:#ffc46b"></i>tools/send-to-bottom.ps1</div>
+        <div class="v">常驻 PowerShell 助手，收到 “bottom” 就调 <b>SetWindowPos</b>，用于“固定到桌面”</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 箭头 -->
+  <svg class="overlay" viewBox="0 0 1690 1000">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#6fb6ff"/>
+      </marker>
+      <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#a07bff"/>
+      </marker>
+      <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#5ddba0"/>
+      </marker>
+      <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#ffc46b"/>
+      </marker>
+    </defs>
+
+    <!-- 系统 -> 主进程：空闲秒数（绿） -->
+    <line x1="330" y1="221" x2="330" y2="239" stroke="#5ddba0" stroke-width="1.6" marker-end="url(#ar3)"/>
+    <text x="342" y="236" fill="#5ddba0">getSystemIdleTime()</text>
+
+    <!-- 主进程 -> 系统：窗口层级（黄） -->
+    <line x1="760" y1="239" x2="760" y2="222" stroke="#ffc46b" stroke-width="1.6" marker-end="url(#ar4)"/>
+    <text x="748" y="236" text-anchor="end" fill="#ffc46b">setAlwaysOnTop() / SetWindowPos()</text>
+
+    <!-- 主进程 -> preload -> 渲染：推送 -->
+    <line x1="878" y1="380" x2="924" y2="380" stroke="#6fb6ff" stroke-width="1.6" marker-end="url(#ar)"/>
+    <line x1="1098" y1="380" x2="1136" y2="380" stroke="#6fb6ff" stroke-width="1.6" marker-end="url(#ar)"/>
+
+    <!-- 渲染 -> preload -> 主进程：调用 -->
+    <line x1="1136" y1="520" x2="1098" y2="520" stroke="#a07bff" stroke-width="1.6" marker-end="url(#ar2)"/>
+    <line x1="924" y1="520" x2="878" y2="520" stroke="#a07bff" stroke-width="1.6" marker-end="url(#ar2)"/>
+
+    <!-- preload 内部：两种方向各一个说明 -->
+    <text x="902" y="352" text-anchor="middle" fill="#6fb6ff">推送</text>
+    <text x="902" y="548" text-anchor="middle" fill="#a07bff">调用</text>
+    <text x="1118" y="352" text-anchor="middle" fill="#6fb6ff">推送</text>
+    <text x="1118" y="548" text-anchor="middle" fill="#a07bff">调用</text>
+
+    <!-- 主进程 -> 外部：网络 / 落盘 -->
+    <line x1="300" y1="756" x2="300" y2="790" stroke="#5ddba0" stroke-width="1.6" marker-end="url(#ar3)"/>
+    <text x="312" y="780" fill="#5ddba0">HTTPS 拉天气（10 分钟） · fs 原子写（20 秒）</text>
+  </svg>
+
+  <div class="legend">
+    <span><i style="border-top-color:#6fb6ff"></i>推送 主进程 → 渲染进程</span>
+    <span><i style="border-top-color:#a07bff"></i>调用 渲染进程 → 主进程</span>
+    <span><i style="border-top-color:#5ddba0"></i>采样 / 落盘</span>
+    <span><i style="border-top-color:#ffc46b"></i>窗口层级</span>
+  </div>
+  <div class="foot">唯一数据源：数字全在主进程算好，渲染进程只负责显示</div>
+</div>
+</body>
+</html>
