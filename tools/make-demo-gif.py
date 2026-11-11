@@ -5,12 +5,15 @@
     python tools/make-demo-gif.py <帧目录> <输出.gif> [裁剪框] [宽] [颜色数] [起始帧] [结束帧]
 
 例：
-    python tools/make-demo-gif.py %TEMP%\\demo-frames assets/demo.gif "6,73,829,609" 700 96
+    # 宽写 0 = 不缩放，直接 1:1 用屏幕物理像素（最清晰，推荐）
+    python tools/make-demo-gif.py %TEMP%\\demo-frames assets/demo.gif "10,80,820,600" 0 128
 
-说明：
-    - 帧是按物理像素拍的（dpr=1.5），裁剪框也用物理像素。
-    - 首帧会多停 0.3 秒，让读者先看清界面再进入动作。
-    - GIF 有 256 色上限，这里用自适应调色板 + 逐帧局部调色；有 ffmpeg 的话可以换掉这一步。
+要点（踩过的坑）：
+    - 帧是按物理像素拍的（dpr=1.5）。想清晰就别缩放：按 1:1 导出，让 GitHub 按原尺寸显示；
+      一旦缩小（例如 823→700），文字边缘和壁纸渐变都会糊。
+    - 颜色数别太低：96 色在壁纸渐变上会出现肉眼可见的色块，128 色明显更平滑（代价 +10% 体积）。
+    - 必须开抖动（dither）：GIF 只有 256 色，平滑渐变不开抖动会变成"等高线"。
+    - 首帧多停 0.3 秒，让读者先看清界面。
 """
 import glob
 import os
@@ -21,8 +24,8 @@ from PIL import Image
 frames_dir = sys.argv[1]
 out_path = sys.argv[2]
 crop_arg = sys.argv[3] if len(sys.argv) > 3 else ""
-target_w = int(sys.argv[4]) if len(sys.argv) > 4 else 700
-colors = int(sys.argv[5]) if len(sys.argv) > 5 else 96
+target_w = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+colors = int(sys.argv[5]) if len(sys.argv) > 5 else 128
 start = int(sys.argv[6]) if len(sys.argv) > 6 else 0
 end = int(sys.argv[7]) if len(sys.argv) > 7 else None
 FRAME_MS = 125
@@ -43,10 +46,11 @@ for file in files:
     im = Image.open(file).convert("RGB")
     if box:
         im = im.crop(box)
-    ratio = target_w / im.width
-    if ratio != 1:
-        im = im.resize((target_w, max(1, round(im.height * ratio))), Image.LANCZOS)
-    images.append(im.convert("P", palette=Image.ADAPTIVE, colors=colors))
+    if target_w and target_w != im.width:  # 只有明确要求缩放时才缩放
+        im = im.resize((target_w, max(1, round(im.height * target_w / im.width))), Image.LANCZOS)
+    images.append(
+        im.convert("P", palette=Image.ADAPTIVE, colors=colors, dither=Image.Dither.FLOYDSTEINBERG)
+    )
 
 durations = [FRAME_MS] * len(images)
 durations[0] += 300  # 首帧多停 0.3s

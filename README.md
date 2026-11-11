@@ -354,10 +354,19 @@ node_modules\electron\dist\electron.exe tools\render-diagram.js
 node_modules\electron\dist\electron.exe tools\record-demo.js %TEMP%\demo-frames 9200 8 1150 30 560 410
 
 # 2) 期间用脚本模拟鼠标（挪动/点击图钉/拖拽/打开菜单），录完再合成
-python tools\make-demo-gif.py %TEMP%\demo-frames assets\demo.gif "6,73,829,609" 700 96
+#    第 4 个参数写 0 = 不缩放，按屏幕物理像素 1:1 导出（清晰的关键）
+python tools\make-demo-gif.py %TEMP%\demo-frames assets\demo.gif "10,80,820,600" 0 128
 ```
 
-好处是**能拍到系统亚克力**（普通 BitBlt / GDI 截屏拍不透明窗口会把模糊拍丢），代价是 GIF 只有 256 色，壁纸渐变会有一点点色带。
+好处是**能拍到系统亚克力**（普通 BitBlt / GDI 截屏拍不透明窗口会把模糊拍丢）。
+
+要让 GIF 清晰，只有三条规则，都是踩坑换来的：
+
+1. **别缩放**：屏幕是 1.5 倍 dpr，窗口物理像素本来就比 CSS 像素多 50%；一旦再把 823px 缩到 700px，文字边缘和渐变就糊了。按 1:1 导出，让 GitHub 按原尺寸显示。
+2. **颜色别太少**：96 色在壁纸渐变上会出现肉眼可见的色块，128 色明显更平滑（体积只多 10%）。
+3. **一定要开抖动**：GIF 只有 256 色，平滑渐变不开 `dither` 会变成一圈圈「等高线」。
+
+代价是文件约 3 MB；想要更清晰更小，可以改用 30fps 的 WebM/MP4（需要 ffmpeg 或 `MediaRecorder`，并且要拖进 README 编辑框上传，GitHub 才会渲染成播放器）。
 
 ---
 
