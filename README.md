@@ -8,6 +8,11 @@
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-success)
 
+![演示：取消固定 → 拖动 → 再固定后锁定 → 打开菜单](assets/demo.gif)
+
+> 实拍 GIF（9 秒 / 8fps，Electron 自己逐帧抓的屏，不是画出来的）：取消固定 → 拖动移动 → 再次固定后位置被锁定、拖不动 → 打开菜单。
+> 录制脚本见 [`tools/record-demo.js`](tools/record-demo.js)，合成见 [`tools/make-demo-gif.py`](tools/make-demo-gif.py)。
+
 | 深色玻璃 | 浅色玻璃 |
 | --- | --- |
 | ![深色玻璃](assets/preview-dark.png) | ![浅色玻璃](assets/preview.png) |
@@ -201,13 +206,15 @@ new BrowserWindow({
 │  ├─ usage-store.js       按天累计秒数，data/usage.json 原子读写
 │  ├─ weather.js           Open-Meteo 天气（城市名→经纬度→气温），带缓存
 │  └─ desktop-pin.js       「固定到桌面」：把窗口压到 z 序最底层（调用下面的 ps1 助手）
-├─ assets/                 icon.png / tray.png / preview*.png / architecture.png
+├─ assets/                 icon.png / tray.png / preview*.png / demo.gif / architecture.png
 ├─ docs/
 │  └─ architecture.html    技术架构图（可直接用浏览器打开，改完重新导出）
 ├─ tools/
 │  ├─ gen-icons.py         Pillow 生成图标（4 倍超采样）
 │  ├─ send-to-bottom.ps1   user32.SetWindowPos(HWND_BOTTOM) 的常驻小助手
 │  ├─ deskshot.js          整屏截图（能拍到 acrylic 窗口，用于验收）
+│  ├─ record-demo.js       逐帧录制演示（getUserMedia 拿桌面流 → canvas 抽帧 → PNG）
+│  ├─ make-demo-gif.py     把逐帧 PNG 合成 README 首屏那张 GIF
 │  └─ render-diagram.js    把 docs/architecture.html 渲染成 assets/architecture.png
 ├─ .gitattributes          强制 .cmd/.vbs/.ps1 用 CRLF（否则 Windows 脚本会失效）
 └─ data/                   ← 运行时生成，已加入 .gitignore
@@ -335,6 +342,22 @@ node_modules\electron\dist\electron.exe tools\render-diagram.js
 ```
 
 （用 Electron 自己的离屏窗口渲染，字体/圆角/阴影和网页里完全一致，还自带系统 dpr 的高清输出。）
+
+### 首屏那张 GIF 是怎么录的
+
+项目里没有引入 ffmpeg，而是让 Electron 自己录自己：开一个**完全透明、不在任务栏**的窗口，用
+`navigator.mediaDevices.getUserMedia({ video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId } } })`
+拿到整屏实时流 → `<video>` → 按每秒 8 帧把画面画进 `<canvas>` → `toDataURL('image/png')` 逐帧回传主进程落盘 → 最后由 Pillow 合成 GIF。
+
+```powershell
+# 1) 录 9.2 秒、8fps，区域是逻辑坐标 (1150,30) 起 560×410
+node_modules\electron\dist\electron.exe tools\record-demo.js %TEMP%\demo-frames 9200 8 1150 30 560 410
+
+# 2) 期间用脚本模拟鼠标（挪动/点击图钉/拖拽/打开菜单），录完再合成
+python tools\make-demo-gif.py %TEMP%\demo-frames assets\demo.gif "6,73,829,609" 700 96
+```
+
+好处是**能拍到系统亚克力**（普通 BitBlt / GDI 截屏拍不透明窗口会把模糊拍丢），代价是 GIF 只有 256 色，壁纸渐变会有一点点色带。
 
 ---
 
