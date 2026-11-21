@@ -25,6 +25,9 @@
   --card-shadow: 0 14px 34px rgba(10, 12, 20, 0.22);
   --hero-shadow: none;
   --hover: rgba(0, 0, 0, 0.07);
+  /* 待办面板：比卡片再实一点，保证小字看得清（下面还会再叠一层模糊） */
+  --panel-bg: rgba(250, 251, 255, 0.97);
+  --panel-shadow: 0 10px 26px rgba(10, 12, 20, 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -41,6 +44,8 @@
     --card-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
     --hero-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     --hover: rgba(255, 255, 255, 0.12);
+    --panel-bg: rgba(28, 29, 36, 0.97);
+    --panel-shadow: 0 12px 30px rgba(0, 0, 0, 0.46);
   }
 }
 
@@ -226,6 +231,50 @@ html[data-glass='mica'] .card {
 }
 
 .pin.active {
+  color: var(--accent-a);
+}
+
+/* 今日待办入口：顶部小胶囊，显示「已完成 / 总数」 */
+.todo-chip {
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  margin: -3px 2px -3px 0;
+  padding: 0 7px 0 5px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--track);
+  color: var(--fg-dim);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.todo-chip svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.todo-chip:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.todo-chip.open {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+/* 全部勾完：小勾变蓝，一眼看出“今天清空了” */
+.todo-chip.all-done {
   color: var(--accent-a);
 }
 
@@ -530,3 +579,293 @@ html[data-glass='css'] .card {
     font-size: 17px;
   }
 }
+
+/* ---------------- 今日待办面板 ----------------
+   点顶部胶囊后从卡片内「滑下来」：绝对定位盖住下半部分，
+   用 opacity + translateY 做展开动画，关闭时 pointer-events:none 不挡点击。 */
+
+.todos {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 40px;
+  bottom: 10px;
+  z-index: 6;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 9px 11px 9px;
+  border-radius: 14px;
+  background: var(--panel-bg);
+  box-shadow: inset 0 0 0 0.5px var(--hairline), var(--panel-shadow);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  opacity: 0;
+  transform: translateY(-7px) scale(0.985);
+  pointer-events: none;
+  transition:
+    opacity 170ms ease,
+    transform 230ms cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-app-region: no-drag;
+}
+
+.card.todo-open .todos {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* 面板展开时，把下面的内容压暗：既像「切换视图」，也避免大字从面板里透出来 */
+.card.todo-open .hero,
+.card.todo-open .wx,
+.card.todo-open .goal,
+.card.todo-open .stats,
+.card.todo-open .chart {
+  opacity: 0.18;
+  transition: opacity 180ms ease;
+}
+
+/* 面板比卡片更「实」：再叠一层自己的模糊，把背后的数字糊开，
+   小字才不会被「6 小时 21 分」透上来干扰 */
+html[data-glass='css'] .todos {
+  background: rgba(247, 248, 252, 0.97);
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-glass='css'] .todos {
+    background: rgba(22, 23, 29, 0.97);
+  }
+}
+
+.todo-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 6px;
+}
+
+.todo-h {
+  font-size: 11px;
+  font-weight: 640;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+}
+
+.todo-count {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.todo-close {
+  width: 18px;
+  height: 18px;
+  margin: 0 -3px 0 auto;
+  border-radius: 6px;
+}
+
+.todo-close svg {
+  width: 9px;
+  height: 9px;
+  fill: none;
+  stroke: currentColor;
+}
+
+.todo-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 2px 0 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.todo-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.todo-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.todo-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 5px 1px;
+  border-bottom: 0.5px solid var(--hairline);
+}
+
+.todo-item:last-child {
+  border-bottom: 0;
+}
+
+.todo-check {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin: 1px 0 0;
+  padding: 0;
+  border: 1.4px solid var(--fg-faint);
+  border-radius: 50%;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.todo-check svg {
+  width: 9px;
+  height: 9px;
+}
+
+.todo-item.done .todo-check {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  color: #fff;
+}
+
+.todo-item:hover .todo-check {
+  border-color: var(--accent-a);
+}
+
+.todo-item.done:hover .todo-check {
+  border-color: transparent;
+}
+
+.todo-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.todo-item.done .todo-text {
+  color: var(--fg-faint);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.todo-del {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: -1px -2px 0 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-faint);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.todo-item:hover .todo-del {
+  opacity: 1;
+}
+
+.todo-del:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.todo-empty {
+  padding: 16px 6px;
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-faint);
+}
+
+.todo-add {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--hairline);
+}
+
+.todo-add input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 23px;
+  padding: 0 8px;
+  border: 0.5px solid var(--hairline);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.1);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+  -webkit-app-region: no-drag;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.todo-add input::placeholder {
+  color: var(--fg-faint);
+}
+
+.todo-add input:focus {
+  border-color: var(--accent-a);
+  background: rgba(127, 127, 127, 0.16);
+}
+
+.todo-submit {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.todo-submit:hover {
+  filter: brightness(1.08);
+}
+
+.todo-submit:active {
+  transform: scale(0.94);
+}
+
+/* 窗口很矮时，面板顶到最上面、少留内边距 */
+@media (max-height: 224px) {
+  .todos {
+    top: 34px;
+    bottom: 7px;
+    padding: 7px 9px;
+  }
+  .todo-head {
+    padding-bottom: 4px;
+  }
+}
+

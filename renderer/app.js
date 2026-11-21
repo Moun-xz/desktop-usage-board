@@ -10,6 +10,7 @@ const params = new URLSearchParams(location.search);
 document.documentElement.dataset.glass = params.get('glass') || 'acrylic';
 
 const els = {
+  card: document.getElementById('card'),
   date: document.getElementById('date'),
   heroValue: document.getElementById('heroValue'),
   goalFill: document.getElementById('goalFill'),
@@ -25,10 +26,19 @@ const els = {
   wxIcon: document.getElementById('wxIcon'),
   wxTemp: document.getElementById('wxTemp'),
   wxMeta: document.getElementById('wxMeta'),
+  todoChip: document.getElementById('todoChip'),
+  todoChipText: document.getElementById('todoChipText'),
+  todos: document.getElementById('todos'),
+  todoList: document.getElementById('todoList'),
+  todoCount: document.getElementById('todoCount'),
+  todoForm: document.getElementById('todoForm'),
+  todoInput: document.getElementById('todoInput'),
+  todoClose: document.getElementById('todoClose'),
 };
 
-const state = { built: false, cols: [] };
+const state = { built: false, cols: [], todoOpen: false, todoSig: '' };
 let lastBattery = null;
+let lastTodos = null;
 
 // ------------------------------------------------------------ 格式化
 
@@ -178,6 +188,87 @@ function renderWeather(w) {
   els.wx.title = `体感 ${w.feels}° · 更新时间${stamp}${w.cached ? '（缓存）' : ''}`;
 }
 
+// ------------------------------------------------------------ 今日待办
+
+/** 顶部胶囊：已完成 / 总数；面板里的列表按需重绘（内容没变就不动 DOM） */
+function renderTodos(t) {
+  if (!t) return;
+  lastTodos = t;
+
+  const total = t.total || 0;
+  const done = t.done || 0;
+  els.todoChipText.textContent = total ? `${done}/${total}` : '待办';
+  els.todoChip.classList.toggle('all-done', total > 0 && done === total);
+  els.todoChip.title = total
+    ? `今日待办：${done}/${total} 已完成（点击展开）`
+    : '今日待办（点击展开）';
+  els.todoCount.textContent = `${done} / ${total}`;
+
+  const sig = JSON.stringify(t.items);
+  if (sig === state.todoSig) return;
+  state.todoSig = sig;
+  renderTodoList(t.items || []);
+}
+
+const CHECK_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.6 4.6L19 6.6" ' +
+  'fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" ' +
+  'stroke-linejoin="round"/></svg>';
+
+function renderTodoList(items) {
+  if (!items.length) {
+    const empty = document.createElement('li');
+    empty.className = 'todo-empty';
+    empty.textContent = '今天还没有待办。在下面写一件，回车就好。';
+    els.todoList.replaceChildren(empty);
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const item of items) {
+    const row = document.createElement('li');
+    row.className = `todo-item${item.done ? ' done' : ''}`;
+    row.dataset.id = item.id;
+
+    const check = document.createElement('button');
+    check.type = 'button';
+    check.className = 'todo-check';
+    check.title = item.done ? '取消勾选' : '标记完成';
+    check.setAttribute('aria-label', check.title);
+    check.innerHTML = CHECK_SVG;
+
+    const text = document.createElement('span');
+    text.className = 'todo-text';
+    text.textContent = item.text;
+    text.title = item.text;
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'todo-del';
+    del.title = '删除';
+    del.setAttribute('aria-label', '删除');
+    del.textContent = '×';
+
+    row.append(check, text, del);
+    frag.appendChild(row);
+  }
+  els.todoList.replaceChildren(frag);
+}
+
+function setTodoOpen(open) {
+  state.todoOpen = Boolean(open);
+  els.card.classList.toggle('todo-open', state.todoOpen);
+  els.todoChip.classList.toggle('open', state.todoOpen);
+  els.todos.setAttribute('aria-hidden', String(!state.todoOpen));
+
+  if (state.todoOpen) {
+    if (lastTodos) renderTodos(lastTodos);
+    els.todoInput.focus({ preventScroll: true });
+  } else {
+    els.todoInput.blur();
+  }
+}
+
 // ------------------------------------------------------------ 主渲染
 
 function render(payload) {
@@ -191,6 +282,9 @@ function render(payload) {
 
   // 天气（可在菜单 → 天气 里关掉）
   renderWeather(payload.weather);
+
+  // 今日待办（顶部胶囊 + 下滑面板）
+  renderTodos(payload.todos);
 
   // 顶部图钉：亮起 = 固定在桌面（不盖住其它应用）
   els.pin.classList.toggle('active', Boolean(payload.pinned));
@@ -237,13 +331,62 @@ els.pin.addEventListener('click', (event) => {
   window.board.togglePin();
 });
 
+// ------------------------------------------------------------ 待办交互
+
+els.todoChip.addEventListener('click', (event) => {
+  event.stopPropagation();
+  setTodoOpen(!state.todoOpen);
+});
+
+els.todoClose.addEventListener('click', (event) => {
+  event.stopPropagation();
+  setTodoOpen(false);
+});
+
+// 回车 / 点 ＋ 都能添加（form 的 submit 同时覆盖这两种）
+els.todoForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const text = els.todoInput.value.trim();
+  if (!text) return;
+  window.board.addTodo(text);
+  els.todoInput.value = '';
+  els.todoInput.focus();
+  els.todoList.scrollTop = 0; // 新条目加在最上面，滚回顶部才看得见
+});
+
+// 列表里点勾 / 点删除（事件委托，列表重绘后也不用重新绑）
+els.todoList.addEventListener('click', (event) => {
+  const row = event.target.closest('.todo-item');
+  if (!row) return;
+  const id = row.dataset.id;
+  if (!id) return;
+  if (event.target.closest('.todo-check')) {
+    window.board.toggleTodo(id);
+  } else if (event.target.closest('.todo-del')) {
+    window.board.removeTodo(id);
+  }
+});
+
+// 点面板外面收起面板（点顶部胶囊有自己的处理，不算“外面”）
+document.addEventListener('mousedown', (event) => {
+  if (!state.todoOpen) return;
+  if (event.target.closest('.todos') || event.target.closest('.todo-chip')) return;
+  setTodoOpen(false);
+});
+
 window.addEventListener('contextmenu', (event) => {
   event.preventDefault();
   window.board.openMenu();
 });
 
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') window.board.hide();
+  if (event.key !== 'Escape') return;
+  // 面板开着时，Esc 先收面板；再按一次才隐藏看板
+  if (state.todoOpen) {
+    setTodoOpen(false);
+    return;
+  }
+  window.board.hide();
 });
 
 // ------------------------------------------------------------ 提示气泡
@@ -276,5 +419,10 @@ window.board.onUpdate(render);
 window.board.snapshot().then((payload) => {
   if (payload) render(payload);
 });
+
+// 调试/演示用：--todo-demo 启动时自动展开待办面板（截图、录 GIF 用）
+if (params.get('todo') === '1') {
+  setTimeout(() => setTodoOpen(true), 200);
+}
 
 initBattery();

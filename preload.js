@@ -21,6 +21,13 @@ contextBridge.exposeInMainWorld('board', {
   openMenu: () => ipcRenderer.send('ui:context-menu'),
   /** 切换「固定到桌面」 */
   togglePin: () => ipcRenderer.send('ui:toggle-pin'),
+  /* ---------------- 今日待办 ---------------- */
+  /** 添加一条（回车触发） */
+  addTodo: (text) => ipcRenderer.send('todos:add', text),
+  /** 勾选 / 取消勾选 */
+  toggleTodo: (id) => ipcRenderer.send('todos:toggle', id),
+  /** 删除一条 */
+  removeTodo: (id) => ipcRenderer.send('todos:remove', id),
   quit: () => ipcRenderer.send('ui:quit'),
   hide: () => ipcRenderer.send('ui:hide'),
 });

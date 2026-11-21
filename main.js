@@ -21,6 +21,7 @@ const os = require('node:os');
 
 const { loadSettings, saveSettings } = require('./src/settings');
 const usageStore = require('./src/usage-store');
+const todoStore = require('./src/todo-store');
 const desktopPin = require('./src/desktop-pin');
 const weather = require('./src/weather');
 
@@ -51,6 +52,11 @@ const deskShotPath = argOf('deskshot');
 
 let settings = loadSettings();
 let usage = usageStore.load();
+let todos = todoStore.load();
+let lastDayKey = usageStore.dayKey(Date.now());
+
+// 启动时先做一次跨天整理：昨天没勾的顺延到今天，昨天勾完的归档
+if (todoStore.rollover(todos, lastDayKey)) todoStore.save(todos);
 
 /** 每日目标时长，可在 data/settings.json 里改 goalHours */
 const goalHours = Math.max(1, Math.min(24, Number(settings.goalHours) || 8));
@@ -149,6 +155,11 @@ function buildBoard() {
     weather: settings.weather.enabled
       ? weatherState || { ok: false, city: settings.weather.city }
       : null,
+    todos: {
+      items: todos.items,
+      total: todos.items.length,
+      done: todoStore.counts(todos).done,
+    },
     days,
   };
 }
@@ -187,6 +198,13 @@ function tick() {
   const now = Date.now();
   const delta = Math.min(5, Math.max(0, (now - lastTickAt) / 1000));
   lastTickAt = now;
+
+  // 跨过零点：使用时长按新的一天重新累计，待办也顺手把没做完的顺延过来
+  const todayKey = usageStore.dayKey(now);
+  if (todayKey !== lastDayKey) {
+    lastDayKey = todayKey;
+    if (todoStore.rollover(todos, todayKey)) todoStore.save(todos);
+  }
 
   if (!sessionLocked) {
     let idle = Number.POSITIVE_INFINITY;
@@ -374,7 +392,8 @@ function createWindow() {
   if (settings.clickThrough) win.setIgnoreMouseEvents(true, { forward: true });
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
-    query: { glass: glassMode },
+    // --todo-demo 只在截图/录演示时用：启动后直接展开待办面板
+    query: { glass: glassMode, todo: process.argv.includes('--todo-demo') ? '1' : '0' },
   });
 
   // 「固定到桌面」模式：点过一次（获得焦点）就重新压回最底层，
@@ -392,7 +411,9 @@ function createWindow() {
     win.showInactive();
     refreshGlass();
     broadcast();
-    if (settings.pinToDesktop) setTimeout(() => desktopPin.sendToBottom(), 300);    if (capturePath || deskShotPath) {
+    if (settings.pinToDesktop) setTimeout(() => desktopPin.sendToBottom(), 300);
+
+    if (capturePath || deskShotPath) {
       setTimeout(() => writeDebugShots(), 1500);
     }
   });
@@ -666,6 +687,28 @@ function menuTemplate() {
       },
     },
     {
+      label: '今日待办',
+      submenu: [
+        {
+          label: `清空已完成（${todoStore.counts(todos).done} 项）`,
+          enabled: todoStore.counts(todos).done > 0,
+          click: () => {
+            const n = todoStore.clearDone(todos);
+            if (n > 0) {
+              todoStore.save(todos);
+              broadcast();
+              showHint(`已清空 ${n} 项已完成的待办`);
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          label: '说明：没勾的会顺延到第二天',
+          enabled: false,
+        },
+      ],
+    },
+    {
       label: '开机自动启动',
       type: 'checkbox',
       checked: isAutoStartEnabled(),
@@ -784,6 +827,7 @@ if (!app.requestSingleInstanceLock()) {
     clearInterval(saveTimer);
     clearInterval(glassTimer);
     persistUsage(true);
+    todoStore.save(todos);
     desktopPin.stop();
     globalShortcut.unregisterAll();
   });
@@ -799,4 +843,27 @@ ipcMain.on('ui:hide', () => toggleVisible(false));
 ipcMain.on('ui:refresh', () => {
   persistUsage(false);
   broadcast();
+});
+
+/* ---------------- 今日待办 ---------------- */
+
+function persistTodos() {
+  // 每次改动立刻落盘：待办是「人手动敲的东西」，丢了比多写几次盘更难受
+  todoStore.save(todos);
+  broadcast();
+}
+
+ipcMain.on('todos:add', (_event, text) => {
+  const item = todoStore.add(todos, text, usageStore.dayKey(Date.now()));
+  if (item) persistTodos();
+});
+
+ipcMain.on('todos:toggle', (_event, id) => {
+  if (!id) return;
+  if (todoStore.toggle(todos, id, usageStore.dayKey(Date.now()))) persistTodos();
+});
+
+ipcMain.on('todos:remove', (_event, id) => {
+  if (!id) return;
+  if (todoStore.remove(todos, id)) persistTodos();
 });

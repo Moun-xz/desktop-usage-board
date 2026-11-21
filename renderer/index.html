@@ -24,6 +24,29 @@
           <path d="M12 8.6V12l2.5 1.6" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" />
         </svg>
         <h1 class="title">屏幕使用时间</h1>
+        <button class="todo-chip" id="todoChip" title="今日待办（点击展开）" aria-label="今日待办">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect
+              x="3.4"
+              y="3.4"
+              width="17.2"
+              height="17.2"
+              rx="5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+            />
+            <path
+              d="M8.4 12.3l2.4 2.4 4.9-5.1"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span id="todoChipText">待办</span>
+        </button>
         <span class="date" id="date">11月9日 周日</span>
         <button class="icon-btn pin" id="pin" title="固定到桌面（不挡住其它窗口）" aria-label="固定到桌面">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -81,6 +104,38 @@
       <section class="chart">
         <div class="bars" id="bars"></div>
         <div class="labels" id="labels"></div>
+      </section>
+
+      <!-- 今日待办：点顶部胶囊后从卡片内滑下来，盖住下半部分 -->
+      <section class="todos" id="todos" aria-label="今日待办" aria-hidden="true">
+        <div class="todo-head">
+          <span class="todo-h">今日待办</span>
+          <span class="todo-count" id="todoCount">0 / 0</span>
+          <button class="icon-btn todo-close" id="todoClose" title="收起（Esc）" aria-label="收起">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M6.6 6.6l10.8 10.8M17.4 6.6L6.6 17.4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <ul class="todo-list" id="todoList"></ul>
+        <form class="todo-add" id="todoForm" autocomplete="off">
+          <input
+            id="todoInput"
+            type="text"
+            maxlength="80"
+            placeholder="写一件今天要做的事，回车添加"
+            spellcheck="false"
+          />
+          <button class="todo-submit" id="todoSubmit" type="submit" title="添加" aria-label="添加">
+            ＋
+          </button>
+        </form>
       </section>
 
       <div class="hint" id="hint" hidden></div>
