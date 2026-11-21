@@ -21,7 +21,9 @@ const DEFAULTS = {
   msTodo: {
     enabled: false,
     clientId: '',
-    tenant: 'consumers', // 个人微软账号用 consumers；公司/学校账号用 common
+    // common = 组织账号和个人微软账号都能登（推荐：应用注册在新租户里也能用个人账号登录）
+    // consumers = 只接受个人微软账号；organizations = 只接受公司/学校账号
+    tenant: 'common',
     listId: '',
     listName: '',
     syncMinutes: 5, // 后台每隔几分钟拉一次

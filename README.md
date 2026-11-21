@@ -103,13 +103,18 @@ pnpm install
 看板里的待办默认只存在本地。想和手机 / 网页上的 **微软待办（Microsoft To Do）** 双向同步，需要你注册一个
 免费的 Azure 应用拿 **Client ID**（约 5 分钟，不需要订阅、不需要信用卡）。
 
+> ⚠️ 用 QQ 邮箱 / outlook.com 这类**个人微软账号**打开 Azure 门户时，可能会报
+> 「所选用户帐户在租户 Microsoft Services 中不存在」——这不是看板的问题，是个人账号还没有自己的 Azure 租户。
+> 先按文档 **第零节** 用 [Azure for Students](https://azure.microsoft.com/free/students)（免费、无信用卡）开一个账户，再回来注册应用。
+
 完整步骤（含每步截图位置、常见报错）见 **[docs/ms-todo-setup.md](docs/ms-todo-setup.md)**，这里只列顺序：
 
-1. Azure 门户 → 应用注册 → 新注册（账户类型选「任何组织目录中的账户和个人 Microsoft 账户」）
-2. 身份验证 → **允许公共客户端流 = 是**（设备码登录要用）
-3. API 权限 → Microsoft Graph → 委托权限 `Tasks.ReadWrite` + `offline_access`
-4. 把「应用程序(客户端) ID」填进 `data/settings.json` 的 `msTodo.clientId`
-5. 菜单 `⋯` →「微软待办同步」→ 登录（复制设备码到浏览器）→ 选择要同步的清单
+1. **第零步**：开通 Azure 账户（学生免费），拿到自己的租户
+2. Azure 门户 → 应用注册 → 新注册（账户类型选「任何组织目录中的账户和个人 Microsoft 账户」）
+3. 身份验证 → **允许公共客户端流 = 是**（设备码登录要用）
+4. API 权限 → Microsoft Graph → 委托权限 `Tasks.ReadWrite` + `offline_access`
+5. 把「应用程序(客户端) ID」填进 `data/settings.json` 的 `msTodo.clientId`
+6. 菜单 `⋯` →「微软待办同步」→ 登录（复制设备码到浏览器）→ 选择要同步的清单
 
 同步规则（避免误删，完整表在文档里）：
 

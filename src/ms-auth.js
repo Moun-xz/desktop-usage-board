@@ -24,7 +24,9 @@ const TOKEN_FILE = path.join(DATA_DIR, 'ms-token.json');
 
 const AUTH_HOST = 'https://login.microsoftonline.com';
 const SCOPES = 'Tasks.ReadWrite offline_access';
-const DEFAULT_TENANT = 'consumers';
+// common：组织账号 + 个人微软账号都能登录（应用注册在某个租户里时用它最稳）
+// consumers：只接受个人微软账号；organizations：只接受公司/学校账号
+const DEFAULT_TENANT = 'common';
 
 function buildUrl(tenant, suffix) {
   const t = tenant || DEFAULT_TENANT;

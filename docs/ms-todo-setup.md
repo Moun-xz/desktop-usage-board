@@ -8,6 +8,42 @@
 
 ---
 
+## 零、先确认你有一个「Azure 租户」（90% 的人会卡在这一步）
+
+如果你用 **QQ 邮箱 / outlook.com / hotmail 这类个人微软账号** 打开 <https://portal.azure.com>，
+很可能会看到这条报错：
+
+> 所选的用户帐户在租户「Microsoft Services」中不存在，且无法访问该租户中的应用程序
+> `c44b4083-3bb0-49c1-b47d-974e53cbdf3c`。
+
+**这不是看板的问题，也不是你账号坏了。** 个人微软账号默认只挂在「Microsoft Services」这个消费者租户里，
+而那个租户不允许注册应用 —— 你必须先有自己的 Azure 账户（它会顺带建一个属于你的租户）。
+
+### 推荐路径：Azure for Students（免费，不要信用卡）
+
+1. 打开 <https://azure.microsoft.com/free/students> → **立即激活 / Activate now**。
+2. 用你**那个个人微软账号**登录（不是学校邮箱）。
+3. 认证学生身份（三选一，按页面提示走）：
+   - **学校邮箱**（`@xxx.edu.cn`）能自动验证最好；
+   - 学校邮箱不被识别时，可以**上传在读证明 / 学生证 + 注册证明**（要求：姓名、学校名、当前在读状态），
+     由 SheerID 审核，通常几分钟、最慢 48 小时；
+   - 或者用 **GitHub Student Developer Pack** 通道（先在 <https://education.github.com/pack> 认证学生身份，
+     再回到 <https://signup.azure.com/studentverification> 用 GitHub 授权验证）。
+4. 验证通过后，`portal.azure.com` 里就会出现你的订阅和**默认目录（租户）**，右上角能看到租户名，
+   **Entra ID → 概述 → 属性 → 租户 ID** 可以查到租户 ID。
+
+> 这条路径顺便会给你 $100 额度（12 个月），做别的 Azure 实验也能用。
+
+### 备选路径：Azure 免费账户（需要一张银行卡做身份验证）
+
+到 <https://azure.microsoft.com/free> 走「免费开始使用」，注册过程会创建租户。
+需要银行卡做身份校验（**免费额度内不会扣费**，但要留意到期后是否转成按量付费）。
+
+> ⚠️ 一个微软账号只能是**一个** Azure for Students 的成员；验证失败时不要反复重试，
+> 容易把这个账号的额度机会用掉 —— 先看清报错再操作。
+
+---
+
 ## 一、注册 Azure 应用（只做一次）
 
 1. 打开 <https://portal.azure.com>，用你的微软账号登录（outlook / hotmail / live 都行）。
@@ -45,15 +81,15 @@
 "msTodo": {
   "enabled": true,
   "clientId": "粘贴-你的-客户端-ID",
-  "tenant": "consumers",
+  "tenant": "common",
   "listId": "",
   "listName": "",
   "syncMinutes": 5
 }
 ```
 
-- 个人微软账号：`tenant` 用 `consumers`
-- 公司 / 学校账号：`tenant` 用 `common`
+- `tenant` 默认 `common`：组织账号和个人微软账号都能登录（应用注册在你自己的租户里也能用个人账号登录）。
+- 如果只想允许个人账号，用 `consumers`；只允许公司/学校账号，用 `organizations`。
 - `listId` / `listName` 先留空，登录后再从菜单里选。
 
 ## 五、登录并选清单
@@ -100,8 +136,11 @@
 
 | 现象 | 原因 / 解决 |
 | --- | --- |
+| **打开 Azure 门户就报「所选用户帐户在租户 Microsoft Services 中不存在…`c44b4083-…`」** | 个人微软账号还没有自己的租户 → 先按上面 **第零节** 开通 Azure for Students（免费无卡） |
 | 菜单里「登录微软账号」点了没反应 | `data/settings.json` 的 `msTodo.clientId` 还没填 |
 | 登录页报 `AADSTS7000218` | 「允许公共客户端流」没开 |
+| 登录页报 `AADSTS50020` / 提示账号不在该租户 | 应用注册时「受支持的帐户类型」没选含个人账号的选项；或 `tenant` 设成了 `organizations` |
+| 登录页报 `AADSTS50059` / 找不到租户 | `msTodo.tenant` 改成 `common` |
 | 同步 401 | 令牌过期且刷新失败 → 菜单里重新登录 |
 | 同步 403 | API 权限里没加 `Tasks.ReadWrite`，或没同意授权 |
 | 同步 404 | 选的清单被删了 → 重新「选择要同步的清单」 |
