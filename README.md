@@ -98,6 +98,32 @@ pnpm install
 - 存储：`data/todos.json`（本地文件，已在 `.gitignore` 里，不会上传）；日期跟使用时长用同一套本地自然日。
 - 菜单 `⋯` →「今日待办」→「清空已完成（N 项）」可以一次性归档掉当天勾完的条目。
 
+### 同步到微软待办（可选，需自己注册一个 Azure 应用）
+
+看板里的待办默认只存在本地。想和手机 / 网页上的 **微软待办（Microsoft To Do）** 双向同步，需要你注册一个
+免费的 Azure 应用拿 **Client ID**（约 5 分钟，不需要订阅、不需要信用卡）。
+
+完整步骤（含每步截图位置、常见报错）见 **[docs/ms-todo-setup.md](docs/ms-todo-setup.md)**，这里只列顺序：
+
+1. Azure 门户 → 应用注册 → 新注册（账户类型选「任何组织目录中的账户和个人 Microsoft 账户」）
+2. 身份验证 → **允许公共客户端流 = 是**（设备码登录要用）
+3. API 权限 → Microsoft Graph → 委托权限 `Tasks.ReadWrite` + `offline_access`
+4. 把「应用程序(客户端) ID」填进 `data/settings.json` 的 `msTodo.clientId`
+5. 菜单 `⋯` →「微软待办同步」→ 登录（复制设备码到浏览器）→ 选择要同步的清单
+
+同步规则（避免误删，完整表在文档里）：
+
+| 情况 | 结果 |
+| --- | --- |
+| 微软待办里新增 / 勾选 | 拉进看板（算作「今天」） |
+| 看板上新增 / 勾选 / 删除 | 推回微软待办（**只推今天的**，历史任务不往回灌） |
+| 两边都改 | 谁后改的听谁的 |
+| 任一边删除 | 另一边下次同步时也删掉 |
+
+面板标题栏右侧会显示蓝色小云朵：`☁ 已同步` / `☁ 同步中` / `⚠ 未同步`（悬停看原因）。
+默认每 5 分钟同步一次（`msTodo.syncMinutes` 可改）；令牌存在 `data/ms-token.json`（权限 600，已 gitignore）。
+不想用就保持 `msTodo.enabled = false`——功能完全离线，不影响本地待办。
+
 ---
 
 ## 三、统计口径（重要，别被数字吓到）
@@ -125,7 +151,7 @@ pnpm install
 | 待办面板里输入 + 回车 | 添加一条待办（也可以点右边的 ＋；`Esc` 或点 `×` 收起面板） |
 | 点待办条目左边的圆圈 | 勾选 / 取消勾选，立刻存盘 |
 | 鼠标移到待办条目上点 `×` | 删除这一条 |
-| 点 `⋯` / 右键窗口 | 弹出菜单：固定到桌面、窗口置顶、鼠标穿透、外观（配色 / 修复毛玻璃 / 盖全屏）、透明度、天气、今日待办、刷新、开机自启、隐藏、退出 |
+| 点 `⋯` / 右键窗口 | 弹出菜单：固定到桌面、窗口置顶、鼠标穿透、外观（配色 / 修复毛玻璃 / 盖全屏）、透明度、天气、今日待办、微软待办同步、刷新、开机自启、隐藏、退出 |
 | 托盘图标单击 | 显示 / 隐藏看板 |
 | 托盘图标右键 | 同样的菜单（多一项「显示 / 隐藏看板」） |
 | `Ctrl + Alt + H` | 显示 / 隐藏 |
@@ -224,10 +250,14 @@ new BrowserWindow({
 │  ├─ usage-store.js       按天累计秒数，data/usage.json 原子读写
 │  ├─ weather.js           Open-Meteo 天气（城市名→经纬度→气温），带缓存
 │  ├─ todo-store.js        今日待办：增删改查 + 跨天顺延/归档，data/todos.json
+│  ├─ ms-auth.js           微软账号登录（设备码流程）+ 令牌刷新，data/ms-token.json
+│  ├─ ms-todo.js           Microsoft Graph「待办」接口封装（列表 / 任务增删改查）
+│  ├─ todo-sync.js         双向合并引擎（拉取 / 推送 / 冲突 last-write-wins / 删除对齐）
 │  └─ desktop-pin.js       「固定到桌面」：把窗口压到 z 序最底层（调用下面的 ps1 助手）
-├─ assets/                 icon.png / tray.png / preview*.png / demo.gif / architecture.png
+├─ assets/                 icon.png / tray.png / preview*.png / todo-panel.png / demo.gif / architecture.png
 ├─ docs/
-│  └─ architecture.html    技术架构图（可直接用浏览器打开，改完重新导出）
+│  ├─ architecture.html    技术架构图（可直接用浏览器打开，改完重新导出）
+│  └─ ms-todo-setup.md     微软待办同步：Azure 应用注册五步 + 同步规则 + FAQ
 ├─ tools/
 │  ├─ gen-icons.py         Pillow 生成图标（4 倍超采样）
 │  ├─ send-to-bottom.ps1   user32.SetWindowPos(HWND_BOTTOM) 的常驻小助手
@@ -240,7 +270,8 @@ new BrowserWindow({
    ├─ settings.json        窗口位置 + 偏好设置（含天气城市）
    ├─ usage.json           每天累计的活跃秒数
    ├─ todos.json           今日待办（没勾的下次打开会自动顺延到当天）
-   └─ weather.json         天气缓存（断网时用它顶着）
+   ├─ weather.json         天气缓存（断网时用它顶着）
+   └─ ms-token.json        微软账号令牌（权限 600，只在开启同步后生成）
 ```
 
 ---
@@ -256,6 +287,7 @@ new BrowserWindow({
 | 启动时默认固定到桌面 | `data/settings.json` 里 `"pinToDesktop": true` |
 | 置顶层级（毛玻璃发暗就改它） | `data/settings.json` 里 `"topLevel"`：`normal`（默认，颜色正常）/ `screen-saver`（盖全屏但发暗） |
 | 待办最多几条 / 单条多长 | `src/todo-store.js` 顶部的 `MAX_ITEMS`（默认 40）/ `MAX_TEXT`（默认 80） |
+| 微软待办同步间隔 / 关掉同步 | `data/settings.json` 里 `"msTodo": { "enabled": true, "syncMinutes": 5 }`；关掉改成 `"enabled": false` |
 | 离开多久算不在（默认 3 分钟） | `main.js` 顶部 `IDLE_LIMIT_SECONDS` |
 | 配色 / 圆角 / 字号 | `renderer/style.css` 顶部的 CSS 变量 |
 | 窗口默认大小位置 | `main.js` 的 `defaultBounds()` |

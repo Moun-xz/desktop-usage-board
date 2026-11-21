@@ -17,7 +17,7 @@ const path = require('node:path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE = path.join(DATA_DIR, 'todos.json');
-const VERSION = 1;
+const VERSION = 2;
 const MAX_ITEMS = 40; // 一个小组件，40 条已经比窗口高了，再多也看不过来
 const MAX_TEXT = 80; // 单条文字上限，超了直接截断（避免把窗口撑爆）
 
@@ -42,13 +42,18 @@ function normalize(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const text = typeof raw.text === 'string' ? raw.text.trim() : '';
   if (!text) return null;
+  const createdAt = typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString();
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : makeId(),
     text: text.slice(0, MAX_TEXT),
     done: Boolean(raw.done),
     day: typeof raw.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.day) ? raw.day : dayKey(Date.now()),
-    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+    createdAt,
     doneAt: typeof raw.doneAt === 'string' ? raw.doneAt : null,
+    updatedAt: Number(raw.updatedAt) || Date.parse(createdAt) || Date.now(),
+    // 微软待办（Microsoft To Do）相关：remoteId 为空 = 还没同步过
+    remoteId: typeof raw.remoteId === 'string' && raw.remoteId ? raw.remoteId : null,
+    remoteAt: Number(raw.remoteAt) || 0,
   };
 }
 
@@ -121,6 +126,9 @@ function add(store, text, today = dayKey(Date.now())) {
     day: today,
     createdAt: new Date().toISOString(),
     doneAt: null,
+    updatedAt: Date.now(),
+    remoteId: null,
+    remoteAt: 0,
   };
   store.items.unshift(item);
   return item;
@@ -133,6 +141,7 @@ function toggle(store, id, today = dayKey(Date.now())) {
   item.done = !item.done;
   item.day = today;
   item.doneAt = item.done ? new Date().toISOString() : null;
+  item.updatedAt = Date.now();
   return item;
 }
 

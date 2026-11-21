@@ -659,6 +659,42 @@ html[data-glass='css'] .todos {
   font-variant-numeric: tabular-nums;
 }
 
+/* 微软待办同步状态：小云朵，别抢戏 */
+.todo-sync {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--fg-faint);
+  opacity: 0.85;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+
+.todo-sync[data-state='ok'] {
+  color: var(--accent-a);
+  opacity: 0.9;
+}
+
+.todo-sync[data-state='busy'] {
+  color: var(--fg-dim);
+  animation: sync-pulse 1.4s ease-in-out infinite;
+}
+
+.todo-sync[data-state='error'] {
+  color: #ff8a8a;
+  opacity: 1;
+}
+
+@keyframes sync-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .todo-close {
   width: 18px;
   height: 18px;

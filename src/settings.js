@@ -16,6 +16,16 @@ const DEFAULTS = {
   topLevel: 'normal', // 置顶层级：normal（毛玻璃颜色正常）| screen-saver（盖住全屏视频，但玻璃会发暗）
   goalHours: 8, // 每日目标时长（小时），改 data/settings.json 即可调整
   weather: { enabled: true, city: '北京' }, // 卡片右上角天气；改成你所在的城市名即可
+  // 微软待办（Microsoft To Do）双向同步。clientId 需要你在 Azure 里注册一个应用拿到，
+  // 详见 docs/ms-todo-setup.md；不填就纯本地用，不影响其它功能。
+  msTodo: {
+    enabled: false,
+    clientId: '',
+    tenant: 'consumers', // 个人微软账号用 consumers；公司/学校账号用 common
+    listId: '',
+    listName: '',
+    syncMinutes: 5, // 后台每隔几分钟拉一次
+  },
 };
 
 const VEILS = ['normal', 'clear', 'ultra'];
@@ -35,6 +45,7 @@ function loadSettings() {
       ...raw,
       window: { ...DEFAULTS.window, ...(raw && raw.window ? raw.window : {}) },
       weather: { ...DEFAULTS.weather, ...(raw && raw.weather ? raw.weather : {}) },
+      msTodo: { ...DEFAULTS.msTodo, ...(raw && raw.msTodo ? raw.msTodo : {}) },
     };
     if (!VEILS.includes(merged.veil)) merged.veil = DEFAULTS.veil;
     if (!THEMES.includes(merged.theme)) merged.theme = DEFAULTS.theme;
@@ -42,6 +53,13 @@ function loadSettings() {
     if (typeof merged.weather.city !== 'string' || !merged.weather.city.trim()) {
       merged.weather.city = DEFAULTS.weather.city;
     }
+    merged.msTodo.clientId = String(merged.msTodo.clientId || '').trim();
+    merged.msTodo.listId = String(merged.msTodo.listId || '').trim();
+    merged.msTodo.listName = String(merged.msTodo.listName || '').trim();
+    if (!['consumers', 'common', 'organizations'].includes(merged.msTodo.tenant)) {
+      merged.msTodo.tenant = DEFAULTS.msTodo.tenant;
+    }
+    merged.msTodo.syncMinutes = Math.min(60, Math.max(1, Number(merged.msTodo.syncMinutes) || 5));
     merged.clickThrough = false;
     return merged;
   } catch {

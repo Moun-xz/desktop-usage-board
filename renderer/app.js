@@ -31,6 +31,7 @@ const els = {
   todos: document.getElementById('todos'),
   todoList: document.getElementById('todoList'),
   todoCount: document.getElementById('todoCount'),
+  todoSync: document.getElementById('todoSync'),
   todoForm: document.getElementById('todoForm'),
   todoInput: document.getElementById('todoInput'),
   todoClose: document.getElementById('todoClose'),
@@ -210,6 +211,36 @@ function renderTodos(t) {
   renderTodoList(t.items || []);
 }
 
+/** 面板标题栏右侧的小云朵：已连接 / 同步中 / 出错 */
+function renderSyncStatus(sync) {
+  if (!sync || !sync.enabled) {
+    els.todoSync.hidden = true;
+    els.todoSync.textContent = '';
+    return;
+  }
+  els.todoSync.hidden = false;
+  if (sync.syncing) {
+    els.todoSync.textContent = '☁ 同步中';
+    els.todoSync.title = '正在和微软待办同步…';
+    els.todoSync.dataset.state = 'busy';
+  } else if (sync.error) {
+    els.todoSync.textContent = '⚠ 未同步';
+    els.todoSync.title = `同步失败：${sync.error}`;
+    els.todoSync.dataset.state = 'error';
+  } else if (sync.lastAt) {
+    const d = new Date(sync.lastAt);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    els.todoSync.textContent = '☁ 已同步';
+    els.todoSync.title = `${sync.listName || '微软待办'} · 上次同步 ${hh}:${mm}`;
+    els.todoSync.dataset.state = 'ok';
+  } else {
+    els.todoSync.textContent = '☁ 已连接';
+    els.todoSync.title = sync.listName ? `同步清单：${sync.listName}` : '已连接微软待办';
+    els.todoSync.dataset.state = 'ok';
+  }
+}
+
 const CHECK_SVG =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.6 4.6L19 6.6" ' +
   'fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" ' +
@@ -285,6 +316,7 @@ function render(payload) {
 
   // 今日待办（顶部胶囊 + 下滑面板）
   renderTodos(payload.todos);
+  renderSyncStatus(payload.msTodo);
 
   // 顶部图钉：亮起 = 固定在桌面（不盖住其它应用）
   els.pin.classList.toggle('active', Boolean(payload.pinned));

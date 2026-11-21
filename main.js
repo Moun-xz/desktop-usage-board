@@ -9,6 +9,8 @@ const {
   nativeImage,
   screen,
   shell,
+  clipboard,
+  dialog,
   globalShortcut,
   powerMonitor,
   desktopCapturer,
@@ -24,6 +26,9 @@ const usageStore = require('./src/usage-store');
 const todoStore = require('./src/todo-store');
 const desktopPin = require('./src/desktop-pin');
 const weather = require('./src/weather');
+const msAuth = require('./src/ms-auth');
+const msTodo = require('./src/ms-todo');
+const todoSync = require('./src/todo-sync');
 
 const APP_NAME = '桌面看板';
 // 置顶层级（实测结论，2026-11-09）：
@@ -75,6 +80,11 @@ let lastTickAt = Date.now();
 let lastShownMinute = -1; // 上次推给界面的是第几分钟，用来避免每秒重绘
 let weatherState = weather.cached(); // 先用上次缓存，首屏不空
 let weatherBusy = false;
+let syncTimer = null;
+let syncSoonTimer = null;
+let lastSyncAt = 0;
+let lastSyncError = '';
+let lastSyncSummary = '';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -160,6 +170,13 @@ function buildBoard() {
       total: todos.items.length,
       done: todoStore.counts(todos).done,
     },
+    msTodo: {
+      enabled: Boolean(settings.msTodo.enabled && settings.msTodo.listId),
+      listName: settings.msTodo.listName,
+      lastAt: lastSyncAt,
+      error: lastSyncError,
+      syncing: todoSync.isSyncing(),
+    },
     days,
   };
 }
@@ -168,6 +185,173 @@ function broadcast() {
   if (!win || win.isDestroyed()) return;
   win.webContents.send('board:update', buildBoard());
 }
+
+/* ---------------- 微软待办：登录 / 选清单 / 同步 ---------------- */
+
+function msOptions() {
+  return {
+    clientId: settings.msTodo.clientId,
+    tenant: settings.msTodo.tenant,
+    listId: settings.msTodo.listId,
+    today: usageStore.dayKey(Date.now()),
+  };
+}
+
+function msConfigured() {
+  return Boolean(settings.msTodo.clientId);
+}
+
+function msSignedIn() {
+  return Boolean(settings.msTodo.clientId && msAuth.hasToken());
+}
+
+function msStatusLine() {
+  const { clientId, listId, listName } = settings.msTodo;
+  if (!clientId) return '状态：还没配置 Client ID（看 docs/ms-todo-setup.md）';
+  if (!msAuth.hasToken()) return '状态：已填 Client ID · 还没登录';
+  if (!listId) return '状态：已登录 · 还没选清单';
+  const when = lastSyncAt
+    ? new Date(lastSyncAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    : '还没同步';
+  return `状态：${listName || '已选清单'} · ${lastSyncError ? `出错（${lastSyncError}）` : `上次 ${when}`}`;
+}
+
+async function syncNow(reason = 'auto') {
+  if (!settings.msTodo.enabled || !settings.msTodo.listId) return;
+  if (!msSignedIn() || todoSync.isSyncing()) return;
+
+  broadcast(); // 让面板上的小云朵先变成「同步中」
+  try {
+    const res = await todoSync.sync(todos, msOptions());
+    todoStore.save(todos);
+    lastSyncAt = Date.now();
+    lastSyncError = '';
+    lastSyncSummary = `拉取 ${res.pulled} · 推送 ${res.pushed} · 更新 ${res.updated} · 删除 ${res.removed}`;
+    if (reason === 'manual') showHint(`已同步：${lastSyncSummary}`);
+  } catch (err) {
+    lastSyncError = todoSync.describeError(err);
+    console.warn('[ms-todo] 同步失败:', err.message);
+    if (reason === 'manual') showHint(`同步失败：${lastSyncError}`);
+  } finally {
+    broadcast();
+    refreshTrayMenu();
+  }
+}
+
+/** 本地改了待办后，过 2 秒推一次远程（合并连点造成的多次写） */
+function scheduleSyncSoon() {
+  if (!settings.msTodo.enabled || !settings.msTodo.listId || !msSignedIn()) return;
+  clearTimeout(syncSoonTimer);
+  syncSoonTimer = setTimeout(() => syncNow('auto'), 2000);
+}
+
+function startSyncTimer() {
+  clearInterval(syncTimer);
+  syncTimer = null;
+  if (!settings.msTodo.enabled || !settings.msTodo.listId || !msSignedIn()) return;
+  const everyMs = Math.max(1, Number(settings.msTodo.syncMinutes) || 5) * 60 * 1000;
+  syncTimer = setInterval(() => syncNow('auto'), everyMs);
+}
+
+async function msLogin() {
+  const clientId = settings.msTodo.clientId;
+  if (!clientId) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info',
+      title: '先注册一个 Azure 应用',
+      message: '微软待办同步需要一个属于你自己的 Client ID（免费，而且只能用你自己的）',
+      detail:
+        '完整步骤见 docs/ms-todo-setup.md，大致是：\n' +
+        '1. 打开 Azure 门户 → 应用注册 → 新注册\n' +
+        '2. 账户类型选「任何组织目录中的账户 + 个人 Microsoft 账户」\n' +
+        '3. 身份验证 → 允许公共客户端流 = 是\n' +
+        '4. API 权限 → Microsoft Graph → 委托的权限 → 加 Tasks.ReadWrite 和 offline_access\n' +
+        '5. 复制「应用程序(客户端) ID」，填进 data/settings.json 的 msTodo.clientId',
+      buttons: ['打开 Azure 门户', '知道了'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) {
+      shell.openExternal('https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade');
+    }
+    return;
+  }
+
+  try {
+    const code = await msAuth.startDeviceCode(clientId, settings.msTodo.tenant);
+    clipboard.writeText(code.userCode);
+    shell.openExternal(code.verificationUri);
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info',
+      title: '登录微软待办',
+      message: `浏览器里输入这个代码：${code.userCode}`,
+      detail:
+        `代码已经复制到剪贴板。\n在打开的页面里粘贴代码 → 用你的微软账号登录 → 同意授权。\n` +
+        `完成后回到这里点「我已完成」（有效期约 ${Math.round(code.expiresIn / 60)} 分钟）。`,
+      buttons: ['我已完成', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response !== 0) return;
+
+    await msAuth.pollDeviceCode(clientId, code.deviceCode, code.interval, settings.msTodo.tenant);
+    notify('微软待办已登录', '接下来选一个要同步的清单');
+    await msChooseList();
+  } catch (err) {
+    notify('登录失败', todoSync.describeError(err) || err.message || String(err));
+  }
+}
+
+async function msChooseList() {
+  if (!msSignedIn()) {
+    showHint('先完成微软账号登录');
+    return;
+  }
+  let lists = [];
+  try {
+    lists = await msTodo.listLists(settings.msTodo.clientId, settings.msTodo.tenant);
+  } catch (err) {
+    notify('读取清单失败', todoSync.describeError(err));
+    return;
+  }
+  if (!lists.length) {
+    showHint('这个账号里还没有待办清单');
+    return;
+  }
+  const template = [
+    { label: '选择要同步的清单', enabled: false },
+    { type: 'separator' },
+    ...lists.slice(0, 20).map((list) => ({
+      label: `${list.name}${list.wellknown === 'defaultList' ? '（默认）' : ''}`,
+      type: 'radio',
+      checked: list.id === settings.msTodo.listId,
+      click: () => {
+        settings.msTodo.listId = list.id;
+        settings.msTodo.listName = list.name;
+        settings.msTodo.enabled = true;
+        saveSettings(settings);
+        refreshTrayMenu();
+        broadcast();
+        startSyncTimer();
+        syncNow('manual');
+      },
+    })),
+  ];
+  Menu.buildFromTemplate(template).popup({ window: win });
+}
+
+function msDisconnect() {
+  msAuth.clearToken();
+  settings.msTodo.enabled = false;
+  lastSyncAt = 0;
+  lastSyncError = '';
+  saveSettings(settings);
+  clearInterval(syncTimer);
+  refreshTrayMenu();
+  broadcast();
+  showHint('已断开微软待办（本地待办还在）');
+}
+
 
 /** 拉天气：成功就更新并重绘；失败保留旧数据，不打扰用户 */
 async function refreshWeather(force = false) {
@@ -693,17 +877,55 @@ function menuTemplate() {
           label: `清空已完成（${todoStore.counts(todos).done} 项）`,
           enabled: todoStore.counts(todos).done > 0,
           click: () => {
+            const doomed = todos.items.filter((it) => it.done && it.remoteId);
             const n = todoStore.clearDone(todos);
             if (n > 0) {
               todoStore.save(todos);
               broadcast();
               showHint(`已清空 ${n} 项已完成的待办`);
+              // 远程也要删，不然下次同步会把它们当「新任务」再拉回来
+              if (doomed.length && settings.msTodo.enabled && msSignedIn()) {
+                Promise.all(doomed.map((it) => todoSync.removeRemote(msOptions(), it.remoteId)))
+                  .then(() => syncNow('auto'))
+                  .catch(() => {});
+              }
             }
           },
         },
         { type: 'separator' },
         {
           label: '说明：没勾的会顺延到第二天',
+          enabled: false,
+        },
+      ],
+    },
+    {
+      label: '微软待办同步',
+      submenu: [
+        { label: msStatusLine(), enabled: false },
+        { type: 'separator' },
+        {
+          label: msSignedIn() ? '重新登录微软账号…' : '登录微软账号…',
+          click: () => msLogin(),
+        },
+        {
+          label: '选择要同步的清单…',
+          enabled: msSignedIn(),
+          click: () => msChooseList(),
+        },
+        {
+          label: '立即同步',
+          enabled: Boolean(settings.msTodo.enabled && settings.msTodo.listId && msSignedIn()),
+          click: () => syncNow('manual'),
+        },
+        { type: 'separator' },
+        {
+          label: '断开连接（删除本地保存的登录令牌）',
+          enabled: msAuth.hasToken(),
+          click: () => msDisconnect(),
+        },
+        {
+          label: '配置说明见 docs/ms-todo-setup.md',
           enabled: false,
         },
       ],
@@ -793,6 +1015,12 @@ if (!app.requestSingleInstanceLock()) {
     if (settings.weather.enabled) refreshWeather(false);
     weatherTimer = setInterval(() => refreshWeather(false), weather.FRESH_MS);
 
+    // 微软待办：启动后补一次同步，之后按设置里的间隔轮询
+    if (settings.msTodo.enabled && settings.msTodo.listId && msSignedIn()) {
+      setTimeout(() => syncNow('auto'), 1500);
+      startSyncTimer();
+    }
+
     powerMonitor.on('lock-screen', () => {
       sessionLocked = true;
       persistUsage(false);
@@ -801,12 +1029,14 @@ if (!app.requestSingleInstanceLock()) {
       sessionLocked = false;
       lastTickAt = Date.now();
       refreshGlass();
+      syncNow('auto'); // 锁屏期间可能在外面用手机改了待办
     });
     powerMonitor.on('suspend', () => persistUsage(false));
     powerMonitor.on('resume', () => {
       lastTickAt = Date.now();
       refreshWeather(false); // 睡眠期间可能已经换天了
       refreshGlass();
+      syncNow('auto');
     });
     screen.on('display-metrics-changed', refreshGlass);
 
@@ -826,6 +1056,8 @@ if (!app.requestSingleInstanceLock()) {
     clearInterval(tickTimer);
     clearInterval(saveTimer);
     clearInterval(glassTimer);
+    clearInterval(syncTimer);
+    clearTimeout(syncSoonTimer);
     persistUsage(true);
     todoStore.save(todos);
     desktopPin.stop();
@@ -851,6 +1083,7 @@ function persistTodos() {
   // 每次改动立刻落盘：待办是「人手动敲的东西」，丢了比多写几次盘更难受
   todoStore.save(todos);
   broadcast();
+  scheduleSyncSoon();
 }
 
 ipcMain.on('todos:add', (_event, text) => {
@@ -865,5 +1098,17 @@ ipcMain.on('todos:toggle', (_event, id) => {
 
 ipcMain.on('todos:remove', (_event, id) => {
   if (!id) return;
-  if (todoStore.remove(todos, id)) persistTodos();
+  const item = todos.items.find((it) => it.id === id);
+  const remoteId = item && item.remoteId;
+  if (!todoStore.remove(todos, id)) return;
+  persistTodos();
+  // 远程那边也删掉，否则下次同步会把它又拉回来
+  if (remoteId && settings.msTodo.enabled && msSignedIn()) {
+    todoSync
+      .removeRemote(msOptions(), remoteId)
+      .then((ok) => {
+        if (ok) syncNow('auto');
+      })
+      .catch(() => {});
+  }
 });
