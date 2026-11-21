@@ -899,37 +899,42 @@ function menuTemplate() {
         },
       ],
     },
-    {
-      label: '微软待办同步',
-      submenu: [
-        { label: msStatusLine(), enabled: false },
-        { type: 'separator' },
-        {
-          label: msSignedIn() ? '重新登录微软账号…' : '登录微软账号…',
-          click: () => msLogin(),
-        },
-        {
-          label: '选择要同步的清单…',
-          enabled: msSignedIn(),
-          click: () => msChooseList(),
-        },
-        {
-          label: '立即同步',
-          enabled: Boolean(settings.msTodo.enabled && settings.msTodo.listId && msSignedIn()),
-          click: () => syncNow('manual'),
-        },
-        { type: 'separator' },
-        {
-          label: '断开连接（删除本地保存的登录令牌）',
-          enabled: msAuth.hasToken(),
-          click: () => msDisconnect(),
-        },
-        {
-          label: '配置说明见 docs/ms-todo-setup.md',
-          enabled: false,
-        },
-      ],
-    },
+    // 只有配置过 Client ID（或已经登录过）才显示这一组，否则普通用户的托盘菜单保持干净
+    ...(settings.msTodo.clientId || msAuth.hasToken()
+      ? [
+          {
+            label: '微软待办同步',
+            submenu: [
+              { label: msStatusLine(), enabled: false },
+              { type: 'separator' },
+              {
+                label: msSignedIn() ? '重新登录微软账号…' : '登录微软账号…',
+                click: () => msLogin(),
+              },
+              {
+                label: '选择要同步的清单…',
+                enabled: msSignedIn(),
+                click: () => msChooseList(),
+              },
+              {
+                label: '立即同步',
+                enabled: Boolean(settings.msTodo.enabled && settings.msTodo.listId && msSignedIn()),
+                click: () => syncNow('manual'),
+              },
+              { type: 'separator' },
+              {
+                label: '断开连接（删除本地保存的登录令牌）',
+                enabled: msAuth.hasToken(),
+                click: () => msDisconnect(),
+              },
+              {
+                label: '配置说明见 docs/ms-todo-setup.md',
+                enabled: false,
+              },
+            ],
+          },
+        ]
+      : []),
     {
       label: '开机自动启动',
       type: 'checkbox',
