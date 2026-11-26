@@ -69,6 +69,7 @@ const GOAL_SECONDS = Math.round(goalHours * 3600);
 
 let win = null;
 let tray = null;
+let isQuitting = false; // 区分「用户关窗口（只是隐藏）」和「真的要退出」
 let tickTimer = null;
 let saveTimer = null;
 let weatherTimer = null;
@@ -85,6 +86,20 @@ let syncSoonTimer = null;
 let lastSyncAt = 0;
 let lastSyncError = '';
 let lastSyncSummary = '';
+
+/** 崩溃日志：写到 data/app.log，方便下次「打不开」时回头查原因（不弹窗、不打扰） */
+function writeCrashLog(kind, detail) {
+  try {
+    const text =
+      typeof detail === 'string' ? detail : (detail && (detail.stack || detail.message)) || JSON.stringify(detail);
+    fs.appendFileSync(path.join(__dirname, 'data', 'app.log'), `[${new Date().toISOString()}] ${kind} ${text}\n`);
+  } catch {
+    /* 连日志都写不进去就算了，不能因为记日志再抛错 */
+  }
+}
+
+process.on('uncaughtException', (err) => writeCrashLog('uncaughtException', err));
+process.on('unhandledRejection', (err) => writeCrashLog('unhandledRejection', err));
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -614,8 +629,15 @@ function createWindow() {
   win.on('moved', persistBoundsSoon);
   win.on('resized', persistBoundsSoon);
 
-  win.on('close', () => {
+  // Alt+F4 / 任务栏关闭 => 只是隐藏，不要真的销毁窗口。
+  // 以前这里直接让窗口被销毁，而进程还在托盘里活着，于是：
+  // 再双击启动器 → 撞上单实例锁 → 第二个实例直接退出 → 什么都不出现（看起来像坏了）。
+  win.on('close', (event) => {
     persistUsage(false);
+    if (!isQuitting) {
+      event.preventDefault();
+      win.hide();
+    }
   });
 
   win.on('closed', () => {
@@ -623,6 +645,17 @@ function createWindow() {
   });
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+}
+
+/**
+ * 窗口不存在（被销毁 / 渲染进程崩了）时重建一个。
+ * 托盘点击、Ctrl+Alt+H、以及「用户又双击了一次启动器」都会走这里，
+ * 保证任何时候点一下都能把看板叫回来。
+ */
+function ensureWindow() {
+  if (win && !win.isDestroyed()) return false;
+  createWindow();
+  return true;
 }
 
 /** 调试截图：窗口自身渲染 + 整屏（等价肉眼所见），完成后退出 */
@@ -770,6 +803,7 @@ function setTopLevel(level) {
 }
 
 function toggleVisible(force) {
+  ensureWindow();
   if (!win || win.isDestroyed()) return;
   const visible = win.isVisible() && !win.isMinimized();
   const next = typeof force === 'boolean' ? force : !visible;
@@ -991,7 +1025,9 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (win) {
+    // 用户又双击了一次启动器：窗口没了就重建，有就把它叫到前面
+    ensureWindow();
+    if (win && !win.isDestroyed()) {
       if (!win.isVisible()) win.showInactive();
       applyWindowLevel();
     }
@@ -1045,6 +1081,20 @@ if (!app.requestSingleInstanceLock()) {
     });
     screen.on('display-metrics-changed', refreshGlass);
 
+    // 渲染进程崩了（极少见）：记一笔，然后自动重载页面，别留个空壳在托盘里
+    app.on('render-process-gone', (_event, _contents, details) => {
+      writeCrashLog('render-process-gone', details && details.reason ? details.reason : 'unknown');
+      if (!isQuitting && win && !win.isDestroyed()) {
+        setTimeout(() => {
+          try {
+            win.reload();
+          } catch (err) {
+            writeCrashLog('reload-failed', err);
+          }
+        }, 800);
+      }
+    });
+
     globalShortcut.register('Control+Alt+H', () => toggleVisible());
     globalShortcut.register('Control+Alt+D', () => toggleClickThrough());
     globalShortcut.register('Control+Alt+Q', () => app.quit());
@@ -1054,6 +1104,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {});
 
   app.on('before-quit', () => {
+    isQuitting = true; // 之后的 close 事件放行，真的销毁窗口
     persistUsage(false);
   });
 
